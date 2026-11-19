@@ -1,0 +1,1 @@
+V1.8: 14 unit types, air weapon eligibility, visibility, jamming, ammunition and resupply, dead unit reservation removal. Air units still use ground grid; shared movement speed. Node tests only; no browser verification. Run node test18.js.

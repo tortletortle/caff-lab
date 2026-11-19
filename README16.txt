@@ -1,0 +1,1 @@
+CAFF V1.6: PIBT with BFS distance maps, aging and reservation checks. Run node test16.js to reproduce. Default scenario seed 37, width 180, ratio .65, limit 150 simulated seconds. Overlaps sampled every 0.05 s. Decision interval 10/24 s. No browser acceptance, dynamic obstacles, rigid-body dynamics or matched 150-second baseline yet. Prior versions retained in source files.

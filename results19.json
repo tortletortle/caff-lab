@@ -1,0 +1,12 @@
+{
+  "rules": "passed",
+  "time": 52.79999999999914,
+  "units": 37,
+  "overlaps": 0,
+  "cash": [
+    1442,
+    1058.8000000000009
+  ],
+  "naturalWinner": 1,
+  "winnerAfterForcedHQDestruction": 0
+}

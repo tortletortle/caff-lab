@@ -1,0 +1,1 @@
+V1.7 combat prototype. Eight unit types, armor multipliers, cooldown, area damage, repairs, automatic targeting, box selection and movement orders. All units share PIBT movement speed and size; destroyed units still occupy navigation reservations and move invisibly. Scout vision/fog not implemented. Node tests: node test17.js. Browser not verified. Legacy arena.html retained.
