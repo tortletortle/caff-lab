@@ -1,0 +1,44 @@
+[
+  {
+    "n": 200,
+    "arrived": 200,
+    "overlaps": 0,
+    "checks": 0,
+    "rejected": 0,
+    "time": 68.34999999999826,
+    "initMs": 78,
+    "meanDecisionMs": 0.20168829090908982,
+    "maxDecisionMs": 1.6248980000000302,
+    "ticks": 165,
+    "maxOverlaps": 0,
+    "wallMs": 718
+  },
+  {
+    "n": 500,
+    "arrived": 500,
+    "overlaps": 0,
+    "checks": 0,
+    "rejected": 0,
+    "time": 83.34999999999741,
+    "initMs": 179,
+    "meanDecisionMs": 0.5351311393034771,
+    "maxDecisionMs": 1.8658419999999296,
+    "ticks": 201,
+    "maxOverlaps": 0,
+    "wallMs": 1925
+  },
+  {
+    "n": 1000,
+    "arrived": 1000,
+    "overlaps": 0,
+    "checks": 0,
+    "rejected": 0,
+    "time": 112.54999999999575,
+    "initMs": 356,
+    "meanDecisionMs": 1.0843552693727478,
+    "maxDecisionMs": 4.096004999999423,
+    "ticks": 271,
+    "maxOverlaps": 0,
+    "wallMs": 5456
+  }
+]

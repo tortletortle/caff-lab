@@ -1,0 +1,39 @@
+[
+  {
+    "mode": "mapf",
+    "n": 200,
+    "arrived": 151,
+    "overlaps": 0,
+    "checks": 0,
+    "rejected": 0,
+    "time": 79.9999999999976,
+    "failures": 49,
+    "planMs": 6996,
+    "maxOverlaps": 0,
+    "ms": 643
+  },
+  {
+    "mode": "local",
+    "n": 200,
+    "arrived": 52,
+    "overlaps": 0,
+    "checks": 8871975,
+    "rejected": 134376,
+    "time": 79.9999999999976,
+    "maxOverlaps": 0,
+    "ms": 2780
+  },
+  {
+    "mode": "mapf",
+    "n": 500,
+    "arrived": 322,
+    "overlaps": 0,
+    "checks": 0,
+    "rejected": 0,
+    "time": 79.9999999999976,
+    "failures": 178,
+    "planMs": 17129,
+    "maxOverlaps": 0,
+    "ms": 1604
+  }
+]
