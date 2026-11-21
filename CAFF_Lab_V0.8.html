@@ -1,0 +1,645 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CAFF V0.8 · LP Column Generation & Branch-and-Price</title><style>
+:root{--bg:#09111f;--panel:#111d2e;--panel2:#15243a;--line:#263a55;--text:#e7eff8;--muted:#91a4ba;--teal:#55d6be;--blue:#7eb7ff;--amber:#ffc978;--red:#ff8585}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(1000px 500px at 80% -10%,#17304a 0%,transparent 65%),var(--bg);color:var(--text);font:14px/1.5 Inter,"Segoe UI",sans-serif}.wrap{max-width:1440px;margin:auto;padding:26px}header{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:22px}.eyebrow{color:var(--teal);font-size:11px;letter-spacing:2px;font-weight:800}h1{font-size:27px;margin:5px 0 3px;letter-spacing:-.5px}.desc{color:var(--muted);max-width:850px}.version{border:1px solid #386b73;color:var(--teal);border-radius:8px;padding:7px 11px;font-weight:700;white-space:nowrap}.toolbar{display:flex;flex-wrap:wrap;gap:9px;margin:18px 0}button{border:1px solid #38516e;background:#1a2b42;color:var(--text);border-radius:8px;padding:10px 15px;font-weight:700;cursor:pointer}button.primary{background:linear-gradient(120deg,#176b6b,#1d806f);border-color:#3aa895}button:disabled{opacity:.55;cursor:wait}.status{margin-left:auto;padding:9px 12px;border-radius:8px;background:#142238;color:var(--muted);border:1px solid var(--line)}.status.ok{color:var(--teal)}.status.warn{color:var(--amber)}.status.bad{color:var(--red)}.status.busy{color:var(--blue)}.layout{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(340px,.75fr);gap:16px}.panel{background:linear-gradient(160deg,rgba(21,36,58,.96),rgba(14,25,41,.96));border:1px solid var(--line);border-radius:13px;padding:17px;box-shadow:0 14px 35px rgba(0,0,0,.15)}.panel h2{font-size:15px;margin:0 0 12px}.panel h3{font-size:12px;color:var(--muted);font-weight:700;margin:16px 0 8px}.network svg{width:100%;height:auto;display:block;background:linear-gradient(180deg,#0c1929,#0b1524);border:1px solid #20344e;border-radius:10px}.node-label{font-size:10px;fill:#eaf3fb}.edge-label{font-size:9px;fill:#9fb3c8;text-anchor:middle}.legend{display:flex;gap:15px;flex-wrap:wrap;color:var(--muted);font-size:11px;margin-top:9px}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}.dot.live{background:var(--teal)}.dot.alt{background:#56647d}.dot.cap{background:var(--amber)}.metric-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.metric{background:#0c1828;border:1px solid #223650;border-radius:8px;padding:10px 11px;min-height:60px}.metric span{display:block;color:var(--muted);font-size:11px}.metric b{font-size:19px;font-variant-numeric:tabular-nums}.pill{display:inline-block;margin:12px 0 4px;padding:6px 10px;border-radius:7px;font-size:11px;font-weight:800}.pill.good{color:var(--teal);background:#10332f;border:1px solid #23685d}.pill.warn{color:var(--amber);background:#3a2d18;border:1px solid #72582b}.dual-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.subhead{font-size:11px;color:var(--blue);font-weight:800;margin-bottom:7px}.dual-row{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid #213149;font-size:11px}.dual-row span{color:#b5c6d8;overflow-wrap:anywhere}.dual-row b{font-variant-numeric:tabular-nums}.dual-row .price{color:var(--amber)}.muted{color:var(--muted);font-size:11px}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:11px}th{text-align:left;color:#90a8c0;font-weight:700;background:#0d1929}td,th{padding:8px 9px;border-bottom:1px solid #24364d;vertical-align:top}td{color:#d4e0ec}.hidden{display:none}.wide{margin-top:16px}.foot{margin-top:18px;color:#758ba3;font-size:11px;display:flex;justify-content:space-between;gap:15px;flex-wrap:wrap}code{color:#a8d9ff}@media(max-width:900px){.layout{grid-template-columns:1fr}header{display:block}.version{display:inline-block;margin-top:10px}.status{margin-left:0}}@media(max-width:540px){.wrap{padding:14px}h1{font-size:22px}.dual-grid{grid-template-columns:1fr}}
+</style></head><body><div class="wrap"><header><div><div class="eyebrow">IRON FRONT · NAVIGATION RESEARCH</div><h1>CAFF V0.8 / 严格列生成实验室</h1><div class="desc">LP 对偶价格 · 负约化成本定价 · 时间扩展最短路径 · Branch-and-Price。此实验室使用小规模可证明实例验证优化器，不代表千单位连续空间物理性能。</div></div><div class="version">RESEARCH BUILD 0.8</div></header>
+<div class="toolbar"><button id="runLP">运行 LP 列生成</button><button id="runBP" class="primary">运行 Branch-and-Price</button><button id="runAll">运行完整流程</button><button id="reset">重置视图</button><div id="status" class="status">引擎加载中</div></div>
+<div class="layout"><section class="panel"><h2>全局时间扩展交通网络</h2><div id="network" class="network"></div><div class="legend"><span><i class="dot live"></i>当前 LP / 整数解使用的通道</span><span><i class="dot alt"></i>候选通道</span><span><i class="dot cap"></i>容量受限共享资源</span></div><div class="muted" style="margin-top:10px">示例包含三个军团与共享瓶颈 R12、R23、R31。虚线为独立绕行路线；边标签中的数字为 LP 流量或整数路径占用。</div></section>
+<section class="panel"><h2>LP 松弛与对偶证书</h2><div id="lpMetrics" class="metric-grid"></div><div id="lpCert" class="pill warn">等待运行 LP</div><h3>对偶价格明细</h3><div id="duals" class="muted">运行 LP 列生成后显示真实 LP 对偶价格。</div></section></div>
+<section id="lpPanel" class="panel wide hidden"><h2>受限主问题生成列明细</h2><div class="table-wrap"><table><thead><tr><th>军团</th><th>列数</th><th>当前 LP 正流量路径（x）</th></tr></thead><tbody id="columnRows"></tbody></table></div></section>
+<div class="layout wide"><section class="panel"><h2>Branch-and-Price 整数求解</h2><div id="bpMetrics" class="metric-grid"></div><div id="bpCert" class="pill warn">等待运行整数优化</div></section><section class="panel"><h2>分支树日志</h2><div class="table-wrap"><table><thead><tr><th>节点</th><th>深度</th><th>状态</th><th>LP下界</th><th>分支弧</th><th>y值</th></tr></thead><tbody id="branchRows"></tbody></table></div></section></div>
+<section id="bpPanel" class="panel wide hidden"><h2>最终军团路线与预约</h2><div class="table-wrap"><table><thead><tr><th>军团</th><th>路线</th><th>出发时隙</th><th>抵达时隙</th><th>成本</th></tr></thead><tbody id="assignmentRows"></tbody></table></div></section>
+<div class="foot"><span>CAFF V0.8 · Two-phase simplex + exact reduced-cost pricing + arc-branching Branch-and-Price</span><span>证明状态只在定价穷尽、分支树完成且未触发预算限制时显示为“已证明”。</span></div></div>
+<script>'use strict';
+/*
+ * CAFF V0.6 — time-expanded, multi-commodity, unsplittable convoy planner.
+ * Each convoy is a commodity with its own OD pair. A candidate is a complete
+ * time-expanded path (including intermediate waits). All corridors and slots
+ * share one capacity ledger. Exact branch-and-bound solves the integer path
+ * assignment over the generated candidate set; it is not a polynomial-time
+ * vanilla single-commodity min-cost-flow solver.
+ */
+
+class MinHeap {
+  constructor(compare=(a,b)=>a.cost-b.cost){ this.a=[]; this.compare=compare; }
+  get size(){ return this.a.length; }
+  push(x){ const a=this.a; a.push(x); let i=a.length-1; while(i){const p=(i-1)>>1;if(this.compare(a[p],x)<=0)break;a[i]=a[p];i=p;}a[i]=x; }
+  pop(){ const a=this.a;if(!a.length)return null;const top=a[0],last=a.pop();if(a.length){let i=0;while(true){let l=i*2+1,r=l+1,b=i;if(l<a.length&&this.compare(a[l],last)<0)b=l;if(r<a.length&&this.compare(a[r],b===i?last:a[l])<0)b=r;if(b===i)break;a[i]=a[b];i=b;}a[i]=last;}return top; }
+}
+
+function resourceKey(edge, slot){
+  const lane = edge.sharedCapacity ? 'shared' : String(edge.direction ?? `${edge.from}>${edge.to}`);
+  return `${edge.resource || edge.id}|${lane}|${slot}`;
+}
+
+function normalizeGraph(graph){
+  const nodes = new Set(graph.nodes.map(n=>n.id));
+  const edges = graph.edges.map(e=>{
+    if(!nodes.has(e.from)||!nodes.has(e.to)) throw new Error(`edge ${e.id}: unknown endpoint`);
+    if(!(e.capacity>0)||!(e.travelTicks>0)) throw new Error(`edge ${e.id}: capacity/travelTicks must be positive`);
+    return {...e, resource:e.resource||e.id, sharedCapacity:!!e.sharedCapacity, toll:Math.max(0,e.toll||0)};
+  });
+  const adj = new Map([...nodes].map(n=>[n,[]]));
+  for(const e of edges) adj.get(e.from).push(e);
+  for(const a of adj.values()) a.sort((x,y)=>x.id.localeCompare(y.id));
+  return {nodes:[...nodes],edges,adj};
+}
+
+function enumerateTimeExpandedOptions(graphInput, convoy, cfg={}){
+  const graph = graphInput.adj ? graphInput : normalizeGraph(graphInput);
+  const slotTicks = cfg.slotTicks ?? 5;
+  const horizonSlots = cfg.horizonSlots ?? 18;
+  const maxOptions = cfg.maxOptionsPerConvoy ?? 24;
+  const maxExpansions = cfg.maxExpansionsPerConvoy ?? 50000;
+  const waitCost = cfg.waitCostPerUnitTick ?? 1;
+  const weight = convoy.priorityWeight ?? 1;
+  const units = convoy.units ?? 1;
+  const ready = convoy.readySlot ?? 0;
+  if(!graph.adj.has(convoy.origin)||!graph.adj.has(convoy.destination)) throw new Error(`convoy ${convoy.id}: unknown origin/destination`);
+  if(units<=0||!Number.isInteger(units)) throw new Error(`convoy ${convoy.id}: units must be a positive integer`);
+  const cmp=(a,b)=>a.cost-b.cost || a.t-b.t || a.serial-b.serial;
+  const heap=new MinHeap(cmp); let serial=0, expanded=0;
+  heap.push({node:convoy.origin,t:ready,cost:0,travelTicks:0,waitTicks:0,steps:[],reservations:[],visited:new Set([convoy.origin]),serial:serial++});
+  const out=[];
+  while(heap.size && out.length<maxOptions && expanded<maxExpansions){
+    const s=heap.pop(); expanded++;
+    if(s.node===convoy.destination){
+      const route=s.steps.filter(x=>x.type==='travel').map(x=>x.edgeId);
+      const signature=`${route.join('>')}@${s.steps.filter(x=>x.type==='travel').map(x=>x.depart).join(',')}`;
+      out.push({id:`${convoy.id}:${out.length}`,convoyId:convoy.id,team:convoy.team??'neutral',origin:convoy.origin,destination:convoy.destination,units,priorityWeight:weight,route,steps:s.steps,arrivalSlot:s.t,travelTicks:s.travelTicks,waitTicks:s.waitTicks,cost:Math.round(s.cost),reservations:s.reservations,signature});
+      continue;
+    }
+    if(s.t<horizonSlots){
+      heap.push({...s,t:s.t+1,cost:s.cost+units*weight*slotTicks*waitCost,waitTicks:s.waitTicks+slotTicks,steps:[...s.steps,{type:'wait',node:s.node,from:s.t,to:s.t+1}],serial:serial++});
+    }
+    for(const e of graph.adj.get(s.node)||[]){
+      if(s.visited.has(e.to)) continue;
+      const dur=Math.max(1,Math.ceil(e.travelTicks/slotTicks));
+      const arrival=s.t+dur;
+      if(arrival>horizonSlots) continue;
+      const reservations=[];
+      for(let k=s.t;k<arrival;k++){
+        const key=resourceKey(e,k);
+        reservations.push({key,resource:e.resource,edgeId:e.id,slot:k,units,capacity:e.capacity});
+      }
+      heap.push({node:e.to,t:arrival,cost:s.cost+units*weight*(e.travelTicks+e.toll),travelTicks:s.travelTicks+e.travelTicks,waitTicks:s.waitTicks,steps:[...s.steps,{type:'travel',edgeId:e.id,from:e.from,to:e.to,depart:s.t,arrive:arrival,travelTicks:e.travelTicks}],reservations:[...s.reservations,...reservations],visited:new Set([...s.visited,e.to]),serial:serial++});
+    }
+  }
+  return {options:out,expanded,truncated:expanded>=maxExpansions || (out.length>=maxOptions && heap.size>0)};
+}
+
+function buildOptions(graph,convoys,cfg={}){
+  const all=[]; let expanded=0,truncated=0;
+  for(const c of convoys){const r=enumerateTimeExpandedOptions(graph,c,cfg);all.push(r.options);expanded+=r.expanded;if(r.truncated)truncated++;}
+  return {all,expanded,truncated};
+}
+
+function optionFits(option,used,caps){
+  for(const r of option.reservations){const cap=caps.get(r.key)??r.capacity;if((used.get(r.key)||0)+r.units>cap)return false;}
+  return true;
+}
+function applyOption(option,used,sign=1){for(const r of option.reservations){const v=(used.get(r.key)||0)+sign*r.units;if(v)used.set(r.key,v);else used.delete(r.key);}}
+function optionCompare(a,b){return a.cost-b.cost||a.arrivalSlot-b.arrivalSlot||a.signature.localeCompare(b.signature);}
+
+function solveJointIntegerFlow(convoys, optionsByConvoy, cfg={}){
+  const nodeBudget=cfg.nodeBudget??500000;
+  const caps=new Map();
+  for(const list of optionsByConvoy)for(const o of list)for(const r of o.reservations){const old=caps.get(r.key);caps.set(r.key,old===undefined?r.capacity:Math.min(old,r.capacity));}
+  const order=convoys.map((c,i)=>({i,opts:[...(optionsByConvoy[i]||[])].sort(optionCompare),units:c.units||1,priority:c.priorityWeight||1}));
+  for(const x of order) if(!x.opts.length) return {feasible:false,optimal:true,cost:Infinity,assignments:[],nodes:0,reason:`no time-expanded route for ${convoys[x.i].id}`};
+  // Most constrained / largest convoys first. This is only a search ordering;
+  // objective and shared capacity constraints remain global.
+  order.sort((a,b)=>a.opts.length-b.opts.length || b.units-a.units || b.priority-a.priority || a.i-b.i);
+  const used=new Map(),bestUsed=new Map(); let bestCost=Infinity,best=null,nodes=0,aborted=false;
+  const minSuffix=Array(order.length+1).fill(0);
+  for(let i=order.length-1;i>=0;i--) minSuffix[i]=minSuffix[i+1]+Math.min(...order[i].opts.map(o=>o.cost));
+  // Feasible incumbent: sequential best-fit, then retry a few deterministic orderings.
+  function greedy(ordering){const u=new Map(),picked=[];let cost=0;for(const x of ordering){let found=x.opts.find(o=>optionFits(o,u,caps));if(!found)return null;applyOption(found,u,1);picked.push([x.i,found]);cost+=found.cost;}return {cost,picked,used:u};}
+  const variants=[order,[...order].sort((a,b)=>b.units-a.units||a.i-b.i),[...order].sort((a,b)=>b.priority-a.priority||a.i-b.i),[...order].reverse()];
+  for(const v of variants){const g=greedy(v);if(g&&g.cost<bestCost){bestCost=g.cost;best=new Array(convoys.length);for(const [i,o] of g.picked)best[i]=o;bestUsed.clear();for(const [k,n] of g.used)bestUsed.set(k,n);}}
+  const picked=new Array(convoys.length);
+  function dfs(depth,cost){
+    if(++nodes>nodeBudget){aborted=true;return;}
+    if(cost+minSuffix[depth]>=bestCost)return;
+    if(depth===order.length){bestCost=cost;best=picked.slice();bestUsed.clear();for(const [k,n] of used)bestUsed.set(k,n);return;}
+    const x=order[depth];
+    const feasible=x.opts.filter(o=>optionFits(o,used,caps));
+    if(!feasible.length)return;
+    // Strong admissible lower bound: each remaining convoy independently takes
+    // its cheapest option that still fits the current partial reservation state.
+    let lb=cost;for(let j=depth;j<order.length;j++){const y=order[j];let m=Infinity;for(const o of y.opts)if(optionFits(o,used,caps)&&o.cost<m)m=o.cost;if(!Number.isFinite(m))return;lb+=m;}
+    if(lb>=bestCost)return;
+    for(const o of feasible){if(cost+o.cost+minSuffix[depth+1]>=bestCost)continue;applyOption(o,used,1);picked[x.i]=o;dfs(depth+1,cost+o.cost);picked[x.i]=undefined;applyOption(o,used,-1);if(aborted&&nodes>nodeBudget)break;}
+  }
+  if(order.length)dfs(0,0);
+  if(!best)return {feasible:false,optimal:!aborted,cost:Infinity,assignments:[],nodes,aborted,reason:'shared capacities prevent a complete assignment'};
+  const assignments=best.map((o,i)=>({convoyId:convoys[i].id,team:convoys[i].team??'neutral',units:convoys[i].units,origin:convoys[i].origin,destination:convoys[i].destination,...o}));
+  return {feasible:true,optimal:!aborted,cost:bestCost,assignments,nodes,aborted,nodeBudget,resourceUsage:Object.fromEntries(bestUsed),capacityCount:caps.size};
+}
+
+class ReservationLedger {
+  constructor(){this.used=new Map();this.caps=new Map();this.tokens=new Map();this.version=0;}
+  reserve(convoyId,option){
+    const old=this.tokens.get(convoyId)||[];const staged=new Map(this.used);
+    for(const r of old){const n=(staged.get(r.key)||0)-r.units;if(n>0)staged.set(r.key,n);else staged.delete(r.key);}
+    const delta=new Map();for(const r of option.reservations)delta.set(r.key,(delta.get(r.key)||0)+r.units);
+    for(const [key,n] of delta){const r=option.reservations.find(x=>x.key===key),cap=this.caps.has(key)?Math.min(this.caps.get(key),r.capacity):r.capacity;if((staged.get(key)||0)+n>cap)return false;}
+    for(const [key,n] of delta)staged.set(key,(staged.get(key)||0)+n);
+    this.used=staged;this.tokens.set(convoyId,option.reservations.map(x=>({...x})));for(const r of option.reservations)this.caps.set(r.key,this.caps.has(r.key)?Math.min(this.caps.get(r.key),r.capacity):r.capacity);this.version++;return true;
+  }
+  release(convoyId){const legs=this.tokens.get(convoyId);if(!legs)return false;for(const r of legs){const n=(this.used.get(r.key)||0)-r.units;if(n>0)this.used.set(r.key,n);else this.used.delete(r.key);}this.tokens.delete(convoyId);this.version++;return true;}
+  commit(assignments){const snap={used:new Map(this.used),caps:new Map(this.caps),tokens:new Map(this.tokens),version:this.version};for(const a of assignments){if(!this.reserve(a.convoyId,a)){this.used=snap.used;this.caps=snap.caps;this.tokens=snap.tokens;this.version=snap.version;return {ok:false,reason:`reservation conflict: ${a.convoyId}`};}}return {ok:true,version:this.version};}
+  assert(){for(const [k,v] of this.used)if(v>(this.caps.get(k)??Infinity))throw new Error(`capacity overflow ${k}: ${v}/${this.caps.get(k)}`);return true;}
+  snapshot(){return [...this.used].map(([key,used])=>({key,used,capacity:this.caps.get(key)})).sort((a,b)=>a.key.localeCompare(b.key));}
+}
+
+
+function solveGreedyOptions(convoys,optionsByConvoy,orderMode='input'){
+  const caps=new Map();for(const os of optionsByConvoy)for(const o of os)for(const r of o.reservations)caps.set(r.key,caps.has(r.key)?Math.min(caps.get(r.key),r.capacity):r.capacity);
+  let order=convoys.map((c,i)=>({c,i}));
+  if(orderMode==='largest-first')order.sort((a,b)=>b.c.units-a.c.units||a.i-b.i);
+  else if(orderMode==='priority-first')order.sort((a,b)=>(b.c.priorityWeight||1)-(a.c.priorityWeight||1)||a.i-b.i);
+  const used=new Map(),assignments=[];let cost=0;
+  for(const {c,i} of order){const opts=[...(optionsByConvoy[i]||[])].sort(optionCompare);const pick=opts.find(o=>optionFits(o,used,caps));if(!pick)continue;applyOption(pick,used,1);assignments.push({convoyId:c.id,team:c.team??'neutral',units:c.units,origin:c.origin,destination:c.destination,...pick});cost+=pick.cost;}
+  return {feasible:assignments.length===convoys.length,cost,assignments,assigned:assignments.length,unassigned:convoys.filter(c=>!assignments.some(a=>a.convoyId===c.id)).map(c=>c.id),resourceUsage:Object.fromEntries(used)};
+}
+
+function validatePlan(assignments,convoys){
+  if(assignments.length!==convoys.length)return {ok:false,reason:'assignment count mismatch'};
+  const ids=new Set(assignments.map(a=>a.convoyId));if(ids.size!==convoys.length||convoys.some(c=>!ids.has(c.id)))return {ok:false,reason:'missing or duplicate convoy'};
+  const used=new Map(),caps=new Map();for(const a of assignments)for(const r of a.reservations){used.set(r.key,(used.get(r.key)||0)+r.units);caps.set(r.key,caps.has(r.key)?Math.min(caps.get(r.key),r.capacity):r.capacity);}
+  for(const [k,v] of used)if(v>(caps.get(k)??Infinity))return {ok:false,reason:`capacity violation ${k}: ${v}/${caps.get(k)}`};
+  return {ok:true,assigned:assignments.length,resourceSlots:used.size};
+}
+
+function planGreedy(graphInput,convoys,cfg={}){
+  const graph=normalizeGraph(graphInput),built=buildOptions(graph,convoys,cfg),solved=solveGreedyOptions(convoys,built.all,cfg.greedyOrder||'input');
+  return {...solved,optionsGenerated:built.all.reduce((s,a)=>s+a.length,0),searchExpanded:built.expanded,optionSearchTruncated:built.truncated,candidatePoolComplete:built.truncated===0,graph:{nodes:graph.nodes.length,edges:graph.edges.length}};
+}
+
+function planGlobal(graphInput,convoys,cfg={}){
+  const graph=normalizeGraph(graphInput);const built=buildOptions(graph,convoys,cfg);
+  const solved=solveJointIntegerFlow(convoys,built.all,cfg);
+  const ledger=new ReservationLedger();
+  let commit={ok:false};if(solved.feasible)commit=ledger.commit(solved.assignments);
+  if(commit.ok)ledger.assert();
+  const validation=solved.feasible?validatePlan(solved.assignments,convoys):{ok:false,reason:solved.reason};
+  return {...solved,commit,validation,optimalWithinCandidates:solved.optimal,optionsGenerated:built.all.reduce((s,a)=>s+a.length,0),searchExpanded:built.expanded,optionSearchTruncated:built.truncated,candidatePoolComplete:built.truncated===0,ledger:ledger.snapshot(),graph:{nodes:graph.nodes.length,edges:graph.edges.length}};
+}
+
+class ClosedLoopPlanner {
+  constructor(cfg={}){this.cfg={...cfg};this.travelEstimate=new Map();this.errorEMA=new Map();this.alpha=cfg.alpha??0.2;this.observations=0;this.replans=0;this.lastResult=null;this.ledger=new ReservationLedger();}
+  calibratedGraph(graph){return {...graph,edges:graph.edges.map(e=>({...e,travelTicks:this.travelEstimate.get(e.id)??e.travelTicks}))};}
+  plan(graph,convoys,cfg={}){const result=planGlobal(this.calibratedGraph(graph),convoys,{...this.cfg,...cfg});if(result.commit.ok){this.ledger=new ReservationLedger();const c=this.ledger.commit(result.assignments);if(!c.ok)throw new Error(c.reason);}this.replans++;this.lastResult=result;return result;}
+  observe(edgeId,predictedTicks,actualTicks){const err=actualTicks-predictedTicks,old=this.errorEMA.get(edgeId)||0;this.errorEMA.set(edgeId,(1-this.alpha)*old+this.alpha*err);const prev=this.travelEstimate.get(edgeId)??predictedTicks;const next=Math.max(1,prev+this.alpha*err);this.travelEstimate.set(edgeId,next);this.observations++;return {error:err,errorEMA:this.errorEMA.get(edgeId),estimate:next};}
+  metrics(){return {observations:this.observations,replans:this.replans,meanAbsErrorEMA:[...this.errorEMA.values()].reduce((s,x)=>s+Math.abs(x),0)/Math.max(1,this.errorEMA.size),calibratedEdges:this.travelEstimate.size};}
+}
+
+window.CAFF_V06={MinHeap,resourceKey,normalizeGraph,enumerateTimeExpandedOptions,buildOptions,solveJointIntegerFlow,ReservationLedger,validatePlan,solveGreedyOptions,planGreedy,planGlobal,ClosedLoopPlanner};
+</script><script>'use strict';
+/*
+ * CAFF V0.8 — exact LP column generation + arc-branching Branch-and-Price.
+ *
+ * Model: unsplittable, multi-commodity time-expanded paths.
+ * Master: min sum c[k,p] x[k,p]
+ *         sum_p x[k,p] = 1                         for each convoy k
+ *         sum_{k,p} a[k,p,r] x[k,p] <= cap[r]      for each resource-time r
+ *         x >= 0 (LP); x binary (integer problem)
+ *
+ * Pricing: exact shortest path on the finite time-expanded DAG, using actual
+ * restricted-master duals. A column is added only when its reduced cost is
+ * negative. Branching is on convoy-specific time-expanded travel arcs (use /
+ * forbid), which the pricing oracle enforces exactly.
+ *
+ * Proof boundary: optimality is certified only if every node's pricing is
+ * exhausted, every Branch-and-Price node is processed, and no numerical or
+ * search budget limit was hit. Otherwise the result is explicitly incomplete.
+ */
+const V6 = window.CAFF_V06;
+const EPS = 1e-8;
+
+function token(edgeId, depart) { return `${edgeId}@${depart}`; }
+function cloneBranch(b={}) {
+  const copyMap = m => new Map([...(m||new Map())].map(([k,v])=>[k,new Set(v)]));
+  return { required: copyMap(b.required), forbidden: copyMap(b.forbidden) };
+}
+function setFor(map,id){ if(!map.has(id)) map.set(id,new Set()); return map.get(id); }
+function branchForConvoy(branch, convoyId) {
+  const required=[...(branch.required.get(convoyId)||[])].map(s=>{
+    const at=s.lastIndexOf('@'); return {edgeId:s.slice(0,at),depart:Number(s.slice(at+1)),token:s};
+  }).sort((a,b)=>a.depart-b.depart||a.edgeId.localeCompare(b.edgeId));
+  const forbidden=branch.forbidden.get(convoyId)||new Set();
+  for(let i=1;i<required.length;i++) if(required[i].depart===required[i-1].depart && required[i].edgeId!==required[i-1].edgeId) return {impossible:true,required,forbidden};
+  return {required,forbidden,impossible:false};
+}
+function optionTokens(option){ return (option.steps||[]).filter(s=>s.type==='travel').map(s=>token(s.edgeId,s.depart)); }
+function optionAllowed(option, convoyId, branch){
+  const b=branchForConvoy(branch,convoyId); if(b.impossible)return false;
+  const used=new Set(optionTokens(option));
+  for(const x of b.forbidden) if(used.has(x)) return false;
+  for(const x of b.required) if(!used.has(x.token)) return false;
+  return true;
+}
+
+// ---------- Dense primal simplex (two phase, Bland anti-cycling) ----------
+function pivotTableau(T, inv, basis, row, col, eps=EPS){
+  const p=T[row][col];
+  if(Math.abs(p)<=eps) throw new Error('simplex: near-zero pivot');
+  const tr=T[row], ir=inv[row];
+  for(let j=0;j<tr.length;j++) tr[j]/=p;
+  for(let j=0;j<ir.length;j++) ir[j]/=p;
+  for(let i=0;i<T.length;i++) if(i!==row){
+    const f=T[i][col]; if(Math.abs(f)<=eps) continue;
+    const ti=T[i], ii=inv[i];
+    for(let j=0;j<ti.length;j++) ti[j]-=f*tr[j];
+    for(let j=0;j<ii.length;j++) ii[j]-=f*ir[j];
+  }
+  basis[row]=col;
+  if(Math.abs(T[row][T[row].length-1])<eps) T[row][T[row].length-1]=0;
+}
+function runSimplex(T, inv, basis, costs, cfg={}){
+  const eps=cfg.eps??EPS, maxIter=cfg.maxSimplexIterations??12000;
+  const m=T.length, n=costs.length, rhs=n;
+  let iterations=0;
+  while(iterations<maxIter){
+    iterations++;
+    const cB=basis.map(j=>costs[j]);
+    const basic=new Uint8Array(n); for(const j of basis) basic[j]=1;
+    let enter=-1;
+    // Bland's rule: first eligible negative reduced cost.
+    for(let j=0;j<n;j++) if(!basic[j]){
+      let z=costs[j];
+      for(let i=0;i<m;i++) z-=cB[i]*T[i][j];
+      if(z < -eps){ enter=j; break; }
+    }
+    if(enter<0){
+      let objective=0; for(let i=0;i<m;i++) objective+=cB[i]*T[i][rhs];
+      const dual=new Array(m).fill(0);
+      for(let j=0;j<m;j++) for(let i=0;i<m;i++) dual[j]+=cB[i]*inv[i][j];
+      const primal=new Array(n).fill(0); for(let i=0;i<m;i++) primal[basis[i]]=Math.max(0,T[i][rhs]);
+      return {status:'optimal',objective,dual,primal,basis,iterations,T,inv};
+    }
+    let leave=-1, best=Infinity, bestBasic=Infinity;
+    for(let i=0;i<m;i++){
+      const d=T[i][enter]; if(d>eps){
+        const rhsVal=Math.max(0,T[i][rhs]); const ratio=rhsVal/d;
+        if(ratio<best-eps || (Math.abs(ratio-best)<=eps && basis[i]<bestBasic)){
+          best=ratio; leave=i; bestBasic=basis[i];
+        }
+      }
+    }
+    if(leave<0) return {status:'unbounded',iterations};
+    pivotTableau(T,inv,basis,leave,enter,eps);
+  }
+  return {status:'iteration_limit',iterations};
+}
+
+function makeMaster(convoys, columnsByConvoy, graph, cfg={}){
+  const horizon=cfg.horizonSlots??18;
+  const resourceCaps=new Map();
+  for(const e of graph.edges) for(let t=0;t<horizon;t++){
+    const key=V6.resourceKey(e,t);
+    resourceCaps.set(key,resourceCaps.has(key)?Math.min(resourceCaps.get(key),e.capacity):e.capacity);
+  }
+  const resources=[...resourceCaps.keys()].sort();
+  const resourceIndex=new Map(resources.map((k,i)=>[k,i]));
+  const columns=[];
+  for(let k=0;k<convoys.length;k++) for(const o of columnsByConvoy[k]||[]) if(optionAllowed(o,convoys[k].id,cfg.branch||{required:new Map(),forbidden:new Map()})) columns.push({convoyIndex:k,option:o});
+  const K=convoys.length, M=resources.length, N=columns.length, nVars=N+K+M, m=K+M;
+  const T=Array.from({length:m},()=>new Float64Array(nVars+1));
+  const basis=new Array(m);
+  for(let k=0;k<K;k++){ T[k][N+k]=1; T[k][nVars]=1; basis[k]=N+k; }
+  for(let r=0;r<M;r++){ T[K+r][N+K+r]=1; T[K+r][nVars]=resourceCaps.get(resources[r]); basis[K+r]=N+K+r; }
+  for(let j=0;j<N;j++){
+    const {convoyIndex,option}=columns[j]; T[convoyIndex][j]=1;
+    const agg=new Map(); for(const q of option.reservations||[]) agg.set(q.key,(agg.get(q.key)||0)+q.units);
+    for(const [key,units] of agg){ const ri=resourceIndex.get(key); if(ri!==undefined) T[K+ri][j]+=units; }
+  }
+  const inv=Array.from({length:m},(_,i)=>{const row=new Float64Array(m);row[i]=1;return row;});
+  return {T,inv,basis,columns,resources,resourceCaps,resourceIndex,K,M,N,nVars,m};
+}
+function phaseOne(master,cfg={}){
+  const {T,inv,basis,N,K,M,nVars,m}=master;
+  const costs=new Array(nVars).fill(0); for(let k=0;k<K;k++) costs[N+k]=1;
+  const r=runSimplex(T,inv,basis,costs,cfg);
+  if(r.status!=='optimal') return {...r,feasible:false};
+  const feasible=r.objective <= (cfg.phaseOneTolerance??1e-7);
+  return {...r,feasible,phaseOneObjective:r.objective};
+}
+function solveRestrictedMaster(convoys, columnsByConvoy, graph, cfg={}){
+  const master=makeMaster(convoys,columnsByConvoy,graph,cfg);
+  const p1=phaseOne(master,cfg);
+  if(p1.status!=='optimal') return {feasible:false,status:p1.status,phaseOneObjective:Infinity,master};
+  const phase1Dual={convoy:new Map(),resource:new Map()};
+  for(let k=0;k<master.K;k++) phase1Dual.convoy.set(convoys[k].id,p1.dual[k]||0);
+  for(let r=0;r<master.M;r++) phase1Dual.resource.set(master.resources[r],-(p1.dual[master.K+r]||0));
+  for(const [k,v] of phase1Dual.resource) if(v<0 && v>-1e-7) phase1Dual.resource.set(k,0);
+  if(!p1.feasible) return {feasible:false,status:'phase1_optimal',phaseOneObjective:p1.objective,phase1Dual,phase1Iterations:p1.iterations,master};
+
+  // Keep row identities while removing redundant artificial rows.
+  const rowMeta=Array.from({length:master.m},(_,i)=>i<master.K?{type:'convoy',id:convoys[i].id}:{type:'resource',key:master.resources[i-master.K]});
+  const {T,inv,basis,N,K,M,nVars}=master; const nOrig=N+M, artStart=N;
+  const oldOrigCols=[...Array(N).keys(), ...Array.from({length:M},(_,r)=>N+K+r)];
+  let i=0;
+  while(i<basis.length){
+    if(basis[i]>=artStart && basis[i]<N+K){
+      const basic=new Uint8Array(nVars);for(const j of basis)basic[j]=1;
+      let enter=-1;for(const j of oldOrigCols)if(!basic[j]&&Math.abs(T[i][j])>EPS){enter=j;break;}
+      if(enter>=0){if(Math.abs(T[i][nVars])>1e-6)throw new Error('artificial basic not zero');pivotTableau(T,inv,basis,i,enter,EPS);i++;}
+      else {T.splice(i,1);inv.splice(i,1);basis.splice(i,1);rowMeta.splice(i,1);}
+    }else i++;
+  }
+  const oldToNew=new Map();for(let j=0;j<N;j++)oldToNew.set(j,j);for(let r=0;r<M;r++)oldToNew.set(N+K+r,N+r);
+  const T2=T.map(row=>{const x=new Float64Array(nOrig+1);for(const [oldJ,newJ] of oldToNew)x[newJ]=row[oldJ];x[nOrig]=row[nVars];return x;});
+  const basis2=basis.map(j=>{if(!oldToNew.has(j))throw new Error(`artificial variable remained basic: ${j}`);return oldToNew.get(j);});
+  const costs=new Array(nOrig).fill(0);for(let j=0;j<N;j++)costs[j]=master.columns[j].option.cost;
+  const p2=runSimplex(T2,inv,basis2,costs,cfg);
+  if(p2.status!=='optimal')return {feasible:false,status:p2.status,phaseOneObjective:p1.objective,phase1Dual,master};
+  const dual={convoy:new Map(),resource:new Map()};
+  for(let i=0;i<rowMeta.length;i++){
+    const meta=rowMeta[i],y=p2.dual[i]||0;
+    if(meta.type==='convoy')dual.convoy.set(meta.id,y);else dual.resource.set(meta.key,-y);
+  }
+  for(const [k,v] of dual.resource) if(v<0 && v>-1e-7) dual.resource.set(k,0);
+  const xByColumn=p2.primal.slice(0,N);
+  const valuesByConvoy=convoys.map(()=>[]);
+  for(let j=0;j<master.columns.length;j++){const col=master.columns[j],x=xByColumn[j]||0;if(x>1e-10)valuesByConvoy[col.convoyIndex].push({option:col.option,x});}
+  return {feasible:true,status:'optimal',objective:p2.objective,dual,phase1Dual,phaseOneObjective:p1.objective,phase1Iterations:p1.iterations,phase2Iterations:p2.iterations,xByColumn,valuesByConvoy,columns:master.columns,resources:master.resources,rowMeta,master,phase2Iterations:p2.iterations};
+}
+
+// Exact shortest reduced-cost path in the finite time-expanded DAG.
+function priceShortestPath(graph, convoy, dual, phase, branch, cfg={}){
+  const slotTicks=cfg.slotTicks??5, horizon=cfg.horizonSlots??18;
+  const waitCost=cfg.waitCostPerUnitTick??1, units=convoy.units??1, weight=convoy.priorityWeight??1;
+  const b=branchForConvoy(branch,convoy.id);if(b.impossible)return {option:null,states:0,reason:'conflicting required arcs'};
+  if(b.required.some(x=>x.depart<(convoy.readySlot??0)||x.depart>=horizon))return {option:null,states:0,reason:'required arc outside horizon'};
+  const layers=Array.from({length:horizon+1},()=>new Map());
+  const start={node:convoy.origin,t:convoy.readySlot??0,progress:0,cost:0,steps:[],reservations:[],route:[],travelTicks:0,waitTicks:0};
+  const keyOf=(node,progress)=>`${node}\u0000${progress}`;
+  layers[start.t].set(keyOf(start.node,0),start);
+  let states=0,best=null;
+  const add=(t,label)=>{
+    const key=keyOf(label.node,label.progress),old=layers[t].get(key);
+    if(!old||label.cost<old.cost-EPS) layers[t].set(key,label);
+  };
+  for(let t=start.t;t<=horizon;t++){
+    for(const label of layers[t].values()){
+      states++;
+      const req=b.required[label.progress];
+      if(req && req.depart<t) continue;
+      if(label.node===convoy.destination && label.progress===b.required.length){
+        if(!best||label.cost<best.cost-EPS || (Math.abs(label.cost-best.cost)<=EPS && t<best.arrivalSlot)) best={...label,arrivalSlot:t};
+        continue;
+      }
+      if(t<horizon && !(req && req.depart===t)){
+        const nextReq=req;
+        if(!nextReq || t+1<=nextReq.depart){
+          const c=phase===1?0:units*weight*slotTicks*waitCost;
+          add(t+1,{...label,t:t+1,cost:label.cost+c,waitTicks:label.waitTicks+slotTicks,steps:[...label.steps,{type:'wait',node:label.node,from:t,to:t+1}]});
+        }
+      }
+      for(const e of graph.adj.get(label.node)||[]){
+        const tok=token(e.id,t);if(b.forbidden.has(tok))continue;
+        const dur=Math.max(1,Math.ceil(e.travelTicks/slotTicks)),arrival=t+dur;if(arrival>horizon)continue;
+        let progress=label.progress;
+        if(req){
+          if(t>req.depart)continue;
+          if(t===req.depart){if(e.id!==req.edgeId)continue;progress++;}
+          else if(arrival>req.depart)continue;
+        }
+        const nextReq=b.required[progress];if(nextReq && nextReq.depart<arrival)continue;
+        const reservations=[];let resourcePrice=0;
+        for(let s=t;s<arrival;s++){
+          const key=V6.resourceKey(e,s);reservations.push({key,resource:e.resource,edgeId:e.id,slot:s,units,capacity:e.capacity});
+          resourcePrice+=(dual.resource.get(key)||0)*units;
+        }
+        const base=phase===1?0:units*weight*(e.travelTicks+(e.toll||0));
+        const c=base+resourcePrice;
+        add(arrival,{node:e.to,t:arrival,progress,cost:label.cost+c,steps:[...label.steps,{type:'travel',edgeId:e.id,from:e.from,to:e.to,depart:t,arrive:arrival,travelTicks:e.travelTicks}],reservations:[...label.reservations,...reservations],route:[...label.route,e.id],travelTicks:label.travelTicks+e.travelTicks,waitTicks:label.waitTicks});
+      }
+    }
+  }
+  if(!best)return {option:null,states};
+  const travelSteps=best.steps.filter(s=>s.type==='travel');
+  const signature=`${best.route.join('>')}@${travelSteps.map(s=>s.depart).join(',')}`;
+  const baseCost=best.steps.reduce((sum,s)=>sum+(s.type==='wait'?units*weight*slotTicks*waitCost:units*weight*(s.travelTicks+((graph.edges.find(e=>e.id===s.edgeId)||{}).toll||0))),0);
+  const option={id:`${convoy.id}:${signature}`,convoyId:convoy.id,team:convoy.team??'neutral',origin:convoy.origin,destination:convoy.destination,units,priorityWeight:weight,route:best.route,steps:best.steps,arrivalSlot:best.arrivalSlot,travelTicks:best.travelTicks,waitTicks:best.waitTicks,cost:baseCost,reservations:best.reservations,signature};
+  const pi=dual.convoy.get(convoy.id)||0;
+  return {option,pricedCost:best.cost,reducedCost:best.cost-pi,states};
+}
+
+function clonePools(pools){return pools.map(m=>new Map(m));}
+function columnGenerate(graphInput,convoys,initialPools,cfg={}){
+  const graph=graphInput.adj?graphInput:V6.normalizeGraph(graphInput),branch=cfg.branch||{required:new Map(),forbidden:new Map()};
+  const pools=initialPools?clonePools(initialPools):convoys.map(()=>new Map());
+  for(let k=0;k<pools.length;k++) for(const [sig,o] of [...pools[k]]) if(!optionAllowed(o,convoys[k].id,branch)) pools[k].delete(sig);
+  const maxCols=cfg.maxGeneratedColumnsPerConvoy??5000, maxP1=cfg.maxPhase1PricingIterations??200, maxP2=cfg.maxPhase2PricingIterations??300;
+  const tol=cfg.reducedCostTolerance??1e-7;
+  let p1Iters=0,p2Iters=0,pricingStates=0,columnsAddedP1=0,columnsAddedP2=0,pricingCertified=false,finalMinReducedCost=Infinity;
+  let rmp=null;
+  // Phase I column generation: find a feasible restricted master, or prove the
+  // full LP infeasible by exhausting all negative phase-I reduced-cost paths.
+  for(;p1Iters<maxP1;p1Iters++){
+    const lists=pools.map(m=>[...m.values()]);
+    rmp=solveRestrictedMaster(convoys,lists,graph,{...cfg,branch});
+    if(rmp.status!=='phase1_optimal' && rmp.status!=='optimal')return {feasible:false,complete:false,status:rmp.status,pools,p1Iters,p2Iters,pricingStates};
+    if(rmp.phaseOneObjective<=1e-7)break;
+    let added=0;
+    for(let k=0;k<convoys.length;k++){
+      const pr=priceShortestPath(graph,convoys[k],rmp.phase1Dual,1,branch,cfg);pricingStates+=pr.states;
+      if(pr.option && pr.reducedCost < -tol && !pools[k].has(pr.option.signature)){
+        if(pools[k].size>=maxCols)return {feasible:false,complete:false,status:'column_limit',pools,p1Iters,p2Iters,pricingStates};
+        pools[k].set(pr.option.signature,pr.option);added++;columnsAddedP1++;
+      }
+    }
+    if(!added){
+      let duplicateNegative=false;
+      for(let k=0;k<convoys.length;k++){
+        const pr=priceShortestPath(graph,convoys[k],rmp.phase1Dual,1,branch,cfg);
+        if(pr.option && pr.reducedCost < -tol && pools[k].has(pr.option.signature)) duplicateNegative=true;
+      }
+      pricingCertified=!duplicateNegative;
+      return {feasible:false,complete:pricingCertified,status:pricingCertified?'lp_infeasible':'phase1_pricing_inconsistency',phaseOneObjective:rmp.phaseOneObjective,pools,p1Iters:p1Iters+1,p2Iters,pricingStates,pricingCertified};
+    }
+  }
+  if(p1Iters>=maxP1)return {feasible:false,complete:false,status:'phase1_iteration_limit',pools,p1Iters,p2Iters,pricingStates};
+
+  // Phase II: optimize the real objective and add every negative reduced-cost
+  // column found by exact shortest-path pricing until none remains.
+  for(;p2Iters<maxP2;p2Iters++){
+    const lists=pools.map(m=>[...m.values()]);
+    rmp=solveRestrictedMaster(convoys,lists,graph,{...cfg,branch});
+    if(!rmp.feasible)return {feasible:false,complete:false,status:rmp.status,pools,p1Iters,p2Iters,pricingStates};
+    let added=0, mostNegative=Infinity;
+    for(let k=0;k<convoys.length;k++){
+      const pr=priceShortestPath(graph,convoys[k],rmp.dual,2,branch,cfg);pricingStates+=pr.states;
+      if(pr.option && pr.reducedCost<mostNegative)mostNegative=pr.reducedCost;
+      if(pr.option && pr.reducedCost < -tol && !pools[k].has(pr.option.signature)){
+        if(pools[k].size>=maxCols)return {feasible:true,complete:false,status:'column_limit',lp:rmp,pools,p1Iters,p2Iters,pricingStates,mostNegative};
+        pools[k].set(pr.option.signature,pr.option);added++;columnsAddedP2++;
+      }
+    }
+    if(!added){
+      finalMinReducedCost=mostNegative;
+      // A negative reduced-cost column already in the pool indicates numerical
+      // inconsistency or a pricing/master mismatch; do not issue a certificate.
+      let duplicateNegative=false;
+      for(let k=0;k<convoys.length;k++){
+        const pr=priceShortestPath(graph,convoys[k],rmp.dual,2,branch,cfg);
+        if(pr.option && pr.reducedCost < -tol && pools[k].has(pr.option.signature)) duplicateNegative=true;
+      }
+      pricingCertified=!duplicateNegative;
+      return {feasible:true,complete:pricingCertified,status:pricingCertified?'optimal_lp':'pricing_inconsistency',lp:rmp,pools,p1Iters:p1Iters+1,p2Iters:p2Iters+1,pricingStates,columnsAddedP1,columnsAddedP2,mostNegative,finalMinReducedCost,pricingCertified};
+    }
+  }
+  return {feasible:true,complete:false,status:'phase2_iteration_limit',lp:rmp,pools,p1Iters,p2Iters,pricingStates,columnsAddedP1,columnsAddedP2};
+}
+
+function assignmentsFromLP(lp,convoys){
+  const out=[];
+  for(let k=0;k<convoys.length;k++){
+    const xs=lp.valuesByConvoy[k];
+    const pick=xs.find(z=>z.x>1-1e-6);
+    if(!pick)return null;
+    out.push({convoyId:convoys[k].id,team:convoys[k].team??'neutral',units:convoys[k].units,origin:convoys[k].origin,destination:convoys[k].destination,...pick.option});
+  }
+  return out;
+}
+function isIntegralLP(lp,convoys){return !!assignmentsFromLP(lp,convoys);}
+function chooseFractionalArc(lp,convoys,branch){
+  let best=null;
+  for(let k=0;k<convoys.length;k++){
+    const values=new Map();
+    for(const z of lp.valuesByConvoy[k]) for(const s of z.option.steps||[]) if(s.type==='travel'){
+      const tok=token(s.edgeId,s.depart);values.set(tok,(values.get(tok)||0)+z.x);
+    }
+    for(const [tok,v] of values) if(v>1e-6&&v<1-1e-6){
+      const b=branchForConvoy(branch,convoys[k].id);if(b.required.some(x=>x.token===tok)||b.forbidden.has(tok))continue;
+      const score=Math.abs(v-.5);
+      if(!best||score<best.score)best={convoyIndex:k,convoyId:convoys[k].id,arcToken:tok,value:v,score};
+    }
+  }
+  return best;
+}
+function makeChildBranch(branch,convoyId,arcToken,kind){
+  const b=cloneBranch(branch);
+  if(kind==='use')setFor(b.required,convoyId).add(arcToken);else setFor(b.forbidden,convoyId).add(arcToken);
+  return b;
+}
+function solveBranchAndPrice(graphInput,convoys,cfg={}){
+  const graph=V6.normalizeGraph(graphInput),maxNodes=cfg.maxBranchNodes??250,maxDepth=cfg.maxBranchDepth??80;
+  const stack=[{id:0,depth:0,branch:{required:new Map(),forbidden:new Map()},pools:convoys.map(()=>new Map())}];
+  let nextId=1,nodes=0,lpInfeasible=0,boundPruned=0,integralLeaves=0,branchCount=0,pricingIncomplete=0;
+  let incumbent=null,complete=true,rootLowerBound=null,maxColumns=0,rootColumns=0,rootColumnsPerConvoy=[],totalPricingStates=0,totalColumnsGeneratedAcrossTree=0;const treeLog=[];
+  while(stack.length){
+    if(nodes>=maxNodes){complete=false;break;}
+    const node=stack.pop();nodes++;
+    const cg=columnGenerate(graph,convoys,node.pools,{...cfg,branch:node.branch});
+    totalPricingStates+=cg.pricingStates||0;totalColumnsGeneratedAcrossTree+=(cg.columnsAddedP1||0)+(cg.columnsAddedP2||0);
+    maxColumns=Math.max(maxColumns,...(cg.pools||[]).map(m=>m.size));
+    if(!cg.complete){complete=false;pricingIncomplete++;treeLog.push({node:node.id,depth:node.depth,status:cg.status,complete:false});continue;}
+    if(!cg.feasible){lpInfeasible++;treeLog.push({node:node.id,depth:node.depth,status:'LP_INFEASIBLE',phaseOneObjective:cg.phaseOneObjective,complete:true});continue;}
+    const lp=cg.lp;
+    if(node.depth===0){rootLowerBound=lp.objective;rootColumns=cg.pools.reduce((s,m)=>s+m.size,0);rootColumnsPerConvoy=cg.pools.map(m=>m.size);}
+    if(incumbent && lp.objective>=incumbent.cost-1e-7){boundPruned++;treeLog.push({node:node.id,depth:node.depth,status:'BOUND_PRUNED',lpBound:lp.objective,incumbent:incumbent.cost,columns:cg.pools.reduce((s,m)=>s+m.size,0)});continue;}
+    const lists=cg.pools.map(m=>[...m.values()]);
+    const heuristic=V6.solveJointIntegerFlow(convoys,lists,{nodeBudget:cfg.incumbentNodeBudget??30000});
+    if(heuristic.feasible && (!incumbent||heuristic.cost<incumbent.cost-1e-7)){
+      const validation=V6.validatePlan(heuristic.assignments,convoys);
+      if(validation.ok)incumbent={cost:heuristic.cost,assignments:heuristic.assignments,source:'restricted-master integer incumbent'};
+    }
+    if(isIntegralLP(lp,convoys)){
+      const assignments=assignmentsFromLP(lp,convoys),validation=V6.validatePlan(assignments,convoys);
+      if(!validation.ok)throw new Error(`integral LP solution failed capacity validation: ${validation.reason}`);
+      if(!incumbent||lp.objective<incumbent.cost-1e-7)incumbent={cost:lp.objective,assignments,source:'integral LP node'};
+      integralLeaves++;treeLog.push({node:node.id,depth:node.depth,status:'INTEGER',lpBound:lp.objective,columns:cg.pools.reduce((s,m)=>s+m.size,0)});continue;
+    }
+    const frac=chooseFractionalArc(lp,convoys,node.branch);
+    if(!frac){complete=false;pricingIncomplete++;treeLog.push({node:node.id,depth:node.depth,status:'NO_BRANCH_ARC',lpBound:lp.objective});continue;}
+    branchCount++;treeLog.push({node:node.id,depth:node.depth,status:'BRANCH',lpBound:lp.objective,convoyId:frac.convoyId,arcToken:frac.arcToken,fractionalUse:frac.value,columns:cg.pools.reduce((s,m)=>s+m.size,0)});
+    const childNo={id:nextId++,depth:node.depth+1,branch:makeChildBranch(node.branch,frac.convoyId,frac.arcToken,'forbid'),pools:clonePools(cg.pools)};
+    const childYes={id:nextId++,depth:node.depth+1,branch:makeChildBranch(node.branch,frac.convoyId,frac.arcToken,'use'),pools:clonePools(cg.pools)};
+    // Explore the use-arc branch first; it often yields a useful incumbent early.
+    stack.push(childNo);stack.push(childYes);
+    if(node.depth>=maxDepth){complete=false;break;}
+  }
+  const proofComplete=complete&&stack.length===0;
+  const optimalityCertified=proofComplete&&!!incumbent;
+  const infeasibilityCertified=proofComplete&&!incumbent;
+  return {feasible:!!incumbent,optimal:optimalityCertified,optimalityCertified,infeasibilityCertified,status:optimalityCertified?'optimal':(infeasibilityCertified?'infeasible':'incomplete'),cost:incumbent?.cost??Infinity,assignments:incumbent?.assignments??[],incumbentSource:incumbent?.source??null,rootLowerBound,nodes,branchCount,integralLeaves,lpInfeasible,boundPruned,pricingIncomplete,maxColumns,maxColumnsPerConvoy:maxColumns,rootColumns,rootColumnsPerConvoy,totalColumnsGeneratedAcrossTree,totalPricingStates,remainingNodes:stack.length,treeLog,config:{maxNodes,maxDepth},graph:{nodes:graph.nodes.length,edges:graph.edges.length},validation:incumbent?V6.validatePlan(incumbent.assignments,convoys):{ok:false}};
+}
+
+function planLPOnly(graphInput,convoys,cfg={}){
+  const graph=V6.normalizeGraph(graphInput),cg=columnGenerate(graph,convoys,null,cfg);
+  if(!cg.feasible)return {...cg,optimalityCertified:false};
+  const assignments=assignmentsFromLP(cg.lp,convoys);
+  const dualObjective=[...cg.lp.dual.convoy.values()].reduce((s,v)=>s+v,0)-[...cg.lp.dual.resource].reduce((s,[key,mu])=>s+mu*(cg.lp.master.resourceCaps.get(key)||0),0);
+  return {...cg,objective:cg.lp.objective,dualObjective,dualityGap:cg.lp.objective-dualObjective,dualConvoy:Object.fromEntries(cg.lp.dual.convoy),dualResource:Object.fromEntries(cg.lp.dual.resource),assignments,integral:isIntegralLP(cg.lp,convoys),optimalityCertified:cg.complete,totalColumns:cg.pools.reduce((s,m)=>s+m.size,0),columnsPerConvoy:cg.pools.map(m=>m.size)};
+}
+
+window.CAFF_V08={token,priceShortestPath,solveRestrictedMaster,columnGenerate,solveBranchAndPrice,planLPOnly,cloneBranch,chooseFractionalArc};
+</script><script>
+const DEMO_GRAPH={nodes:[
+{id:'s1'},{id:'a1'},{id:'x1'},{id:'t1'},
+{id:'s2'},{id:'a2'},{id:'t2'},
+{id:'s3'},{id:'a3'},{id:'t3'}],edges:[
+{id:'c1-r12',from:'s1',to:'a1',resource:'R12',capacity:1,travelTicks:1,sharedCapacity:true},
+{id:'c1-connector',from:'a1',to:'x1',resource:'c1-connector',capacity:10,travelTicks:1,sharedCapacity:true},
+{id:'c1-r31',from:'x1',to:'t1',resource:'R31',capacity:1,travelTicks:1,sharedCapacity:true},
+{id:'c2-r12',from:'s2',to:'a2',resource:'R12',capacity:1,travelTicks:1,sharedCapacity:true},
+{id:'c2-r23',from:'a2',to:'t2',resource:'R23',capacity:1,travelTicks:1,sharedCapacity:true},
+{id:'c3-r23',from:'s3',to:'a3',resource:'R23',capacity:1,travelTicks:1,sharedCapacity:true},
+{id:'c3-r31',from:'a3',to:'t3',resource:'R31',capacity:1,travelTicks:1,sharedCapacity:true},
+{id:'private1',from:'s1',to:'t1',resource:'P1',capacity:1,travelTicks:10,sharedCapacity:true},
+{id:'private2',from:'s2',to:'t2',resource:'P2',capacity:1,travelTicks:10,sharedCapacity:true},
+{id:'private3',from:'s3',to:'t3',resource:'P3',capacity:1,travelTicks:10,sharedCapacity:true}]};
+const DEMO_CONVOYS=[
+{id:'c1',origin:'s1',destination:'t1',units:1,readySlot:0,priorityWeight:1},
+{id:'c2',origin:'s2',destination:'t2',units:1,readySlot:0,priorityWeight:1},
+{id:'c3',origin:'s3',destination:'t3',units:1,readySlot:1,priorityWeight:1}];
+const CFG={slotTicks:1,horizonSlots:14,waitCostPerUnitTick:1,maxPhase1PricingIterations:100,maxPhase2PricingIterations:150,maxBranchNodes:200,maxBranchDepth:60,maxGeneratedColumnsPerConvoy:2000,maxSimplexIterations:20000,incumbentNodeBudget:100000};
+const $=id=>document.getElementById(id);let lastLP=null,lastBP=null;
+function fmt(x,n=3){return Number.isFinite(x)?Number(x).toFixed(n):'—'}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function setStatus(s,kind='ok'){const e=$('status');e.textContent=s;e.className='status '+kind}
+function renderGraph(){
+ const pos={s1:[62,80],a1:[235,80],x1:[410,80],t1:[640,80],s2:[62,225],a2:[335,225],t2:[640,225],s3:[62,370],a3:[335,370],t3:[640,370]};
+ const edges=[
+ ['c1-r12','s1','a1','R12'],['c1-connector','a1','x1','connector'],['c1-r31','x1','t1','R31'],['private1','s1','t1','private'],
+ ['c2-r12','s2','a2','R12'],['c2-r23','a2','t2','R23'],['private2','s2','t2','private'],
+ ['c3-r23','s3','a3','R23'],['c3-r31','a3','t3','R31'],['private3','s3','t3','private']];
+ const paths=new Map();
+ if(lastLP?.lp){for(let k=0;k<lastLP.lp.valuesByConvoy.length;k++)for(const z of lastLP.lp.valuesByConvoy[k])for(const s of z.option.steps)if(s.type==='travel')paths.set(s.edgeId,(paths.get(s.edgeId)||0)+z.x)}
+ if(lastBP?.assignments){paths.clear();for(const a of lastBP.assignments)for(const s of a.steps)if(s.type==='travel')paths.set(s.edgeId,1)}
+ let svg='';
+ for(const [id,a,b,label] of edges){const [x1,y1]=pos[a],[x2,y2]=pos[b];const used=paths.get(id)||0;const privateEdge=label==='private';let d;
+  if(privateEdge)d=`M ${x1+8} ${y1-10} Q ${(x1+x2)/2} ${y1-52} ${x2-10} ${y2-10}`;else d=`M ${x1+13} ${y1} L ${x2-15} ${y2}`;
+  const ly=privateEdge?y1-36:(y1+y2)/2-9;const lx=privateEdge?(x1+x2)/2:(x1+x2)/2;svg+=`<path d="${d}" fill="none" stroke="${used>0.001?'#55d6be':privateEdge?'#56647d':'#43516b'}" stroke-width="${used>0.001?2.5+Math.min(used,1)*2:1.7}" ${privateEdge?'stroke-dasharray="6 5"':''} marker-end="url(#arrow)"/><text x="${lx}" y="${ly}" class="edge-label">${label}${used>0.001?' · '+fmt(used,2):''}</text>`;
+ }
+ for(const [id,[x,y]] of Object.entries(pos)){svg+=`<circle cx="${x}" cy="${y}" r="13" fill="#16253a" stroke="#86a8c8" stroke-width="1.5"/><text x="${x}" y="${y+4}" text-anchor="middle" class="node-label">${id}</text>`}
+ $('network').innerHTML=`<svg viewBox="0 0 700 430" role="img" aria-label="时间扩展交通网络示意图"><defs><marker id="arrow" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="none" stroke="#8ca4bd" stroke-width="1"/></marker></defs>${svg}</svg>`;
+}
+function renderDual(lp){
+ const prices=Object.entries(lp.dualResource||{}).filter(([,v])=>v>1e-7).sort((a,b)=>b[1]-a[1]);
+ const pi=Object.entries(lp.dualConvoy||{});
+ $('duals').innerHTML=`<div class="dual-grid"><div><div class="subhead">军团约束对偶价格 π</div>${pi.map(([k,v])=>`<div class="dual-row"><span>${esc(k)}</span><b>${fmt(v,4)}</b></div>`).join('')||'<div class="muted">无</div>'}</div><div><div class="subhead">非零通道容量价格 μ</div>${prices.map(([k,v])=>`<div class="dual-row"><span>${esc(k)}</span><b class="price">${fmt(v,4)}</b></div>`).join('')||'<div class="muted">当前无正容量价格</div>'}</div></div>`;
+}
+function renderLP(r){
+ lastLP=r;lastBP=null;renderGraph();
+ $('lpMetrics').innerHTML=[['LP 原始目标值',fmt(r.objective,4)],['对偶目标值',fmt(r.dualObjective,4)],['对偶间隙',fmt(r.dualityGap,8)],['最小约化成本',fmt(r.finalMinReducedCost,8)],['生成列总数',r.totalColumns],['Phase I 新增列',r.columnsAddedP1],['Phase II 新增列',r.columnsAddedP2],['定价状态数',r.pricingStates]].map(([a,b])=>`<div class="metric"><span>${a}</span><b>${b}</b></div>`).join('');
+ $('lpCert').textContent=r.optimalityCertified?'LP 最优性证书：通过（无负约化成本列）':'LP 最优性证书：未通过';$('lpCert').className='pill '+(r.optimalityCertified?'good':'warn');
+ $('columnRows').innerHTML=r.columnsPerConvoy.map((n,i)=>`<tr><td>${esc(DEMO_CONVOYS[i].id)}</td><td>${n}</td><td>${r.lp.valuesByConvoy[i].map(z=>`${esc(z.option.signature)} (${fmt(z.x,3)})`).join('<br>')}</td></tr>`).join('');
+ renderDual(r);$('lpPanel').classList.remove('hidden');$('branchRows').innerHTML='';$('assignmentRows').innerHTML='';
+}
+function renderBP(r){lastBP=r;renderGraph();
+ $('bpMetrics').innerHTML=[['整数目标值',fmt(r.cost,4)],['根节点 LP 下界',fmt(r.rootLowerBound,4)],['Branch-and-Price 节点',r.nodes],['分支次数',r.branchCount],['最大每军团列数',r.maxColumns],['定价状态数',r.totalPricingStates],['整数叶节点',r.integralLeaves],['容量验证',r.validation.ok?'通过':'失败']].map(([a,b])=>`<div class="metric"><span>${a}</span><b>${b}</b></div>`).join('');
+ $('bpCert').textContent=r.optimalityCertified?'全局整数最优性证书：已通过':r.infeasibilityCertified?'不可行性证书：已通过':'全局证书：未完成';$('bpCert').className='pill '+(r.optimalityCertified||r.infeasibilityCertified?'good':'warn');
+ $('branchRows').innerHTML=(r.treeLog||[]).map(x=>`<tr><td>${x.node}</td><td>${x.depth}</td><td>${esc(x.status)}</td><td>${fmt(x.lpBound,4)}</td><td>${esc(x.arcToken||'—')}</td><td>${x.fractionalUse===undefined?'—':fmt(x.fractionalUse,3)}</td></tr>`).join('');
+ $('assignmentRows').innerHTML=(r.assignments||[]).map(a=>`<tr><td>${esc(a.convoyId)}</td><td>${esc(a.route.join(' → '))}</td><td>${a.steps.filter(s=>s.type==='travel').map(s=>s.depart).join(', ')}</td><td>${a.arrivalSlot}</td><td>${fmt(a.cost,3)}</td></tr>`).join('');
+ $('bpPanel').classList.remove('hidden');
+}
+function runLP(){setStatus('正在求解受限主问题并执行负约化成本定价…','busy');$('runLP').disabled=true;setTimeout(()=>{try{const r=CAFF_V08.planLPOnly(DEMO_GRAPH,DEMO_CONVOYS,CFG);renderLP(r);setStatus(r.optimalityCertified?'LP 列生成收敛：未发现负约化成本列':'LP 求解未完成','ok');}catch(e){setStatus(e.message,'bad')}finally{$('runLP').disabled=false}},20)}
+function runBP(){setStatus('正在运行 Branch-and-Price…','busy');$('runBP').disabled=true;setTimeout(()=>{try{const r=CAFF_V08.solveBranchAndPrice(DEMO_GRAPH,DEMO_CONVOYS,CFG);renderBP(r);setStatus(r.optimalityCertified?'整数最优性已证明':'求解达到预算或未完成证明',r.optimalityCertified?'ok':'warn')}catch(e){setStatus(e.message,'bad')}finally{$('runBP').disabled=false}},20)}
+$('runLP').addEventListener('click',runLP);$('runBP').addEventListener('click',runBP);$('runAll').addEventListener('click',()=>{runLP();setTimeout(runBP,100)});
+$('reset').addEventListener('click',()=>{lastLP=null;lastBP=null;renderGraph();$('lpMetrics').innerHTML='';$('bpMetrics').innerHTML='';$('duals').innerHTML='';$('columnRows').innerHTML='';$('branchRows').innerHTML='';$('assignmentRows').innerHTML='';$('lpPanel').classList.add('hidden');$('bpPanel').classList.add('hidden');setStatus('等待运行','ok')});
+renderGraph();setStatus('引擎已加载，等待运行','ok');
+</script></body></html>
